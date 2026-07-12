@@ -39,7 +39,7 @@
                             required
                             v-model="passwordInput"
                             class="appearance-none rounded-xl relative block w-full px-4 py-3 border border-slate-300 placeholder-slate-400 text-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition duration-150"
-                            placeholder="Clau d'accés (Ex: 1234)"
+                            placeholder=""
                         />
                     </div>
 
@@ -440,6 +440,18 @@
 
                 </div>
             </main>
+
+            <!-- BARRA DE SEGURETAT INFERIOR (RECUPERACIÓ D'EMERGÈNCIA) -->
+            <footer class="max-w-7xl mx-auto px-4 py-8 text-center border-t border-slate-200 mt-12">
+                <p class="text-xs text-slate-400">Sincronització de seguretat activa i lliure de conflictes.</p>
+                <button 
+                    @click="recuperarBackup" 
+                    class="mt-2 text-xs text-indigo-500 hover:text-indigo-700 underline font-medium"
+                    title="Si el núvol fallés o haguessis perdut dades per error, clica aquí per carregar la darrera còpia que tenies guardada en local."
+                >
+                    ⚠️ Clic aquí si has perdut dades (Recuperar Còpia de Seguretat Local)
+                </button>
+            </footer>
         </div>
     </div>
 
@@ -467,7 +479,7 @@
                 firebaseSuportat = true;
             }
         } catch (e) {
-            console.warn("Sincronització online de Firebase desactivada per a entorn extern.");
+            console.warn("Sincronització de Firebase de Google desactivada. S'activarà el servei alternatiu natiu gratuït.");
         }
 
         const { createApp, ref, computed, onMounted } = Vue;
@@ -484,6 +496,10 @@
                 const syncCodeInput = ref('');
                 const syncCode = ref('');
                 const isConnecting = ref(false);
+                
+                // Semàfor de seguretat anti-sobreescriptura (Race Condition blocker)
+                let darreraModificacioLocal = 0; 
+                
                 let unsubscribeSync = null;
                 let pollingInterval = null;
 
@@ -546,7 +562,7 @@
                     pararPolling();
                 };
 
-                // Carrega llista en mode sense connexió (Local Storage)
+                // Carrega llista en mode local d'emergència
                 const carregarDadesLocals = () => {
                     const localData = localStorage.getItem('musics_data');
                     if (localData) {
@@ -565,11 +581,26 @@
                     }
                 };
 
+                // Guarda una còpia de seguretat local que mai s'esborra
                 const guardarDadesLocals = () => {
                     localStorage.setItem('musics_data', JSON.stringify(members.value));
+                    // Desem també una còpia de rescat persistent en cas de desastre del núvol
+                    localStorage.setItem('musics_data_backup', JSON.stringify(members.value));
                 };
 
-                // CONECTAR AL NÚVOL (Regles 1 i 2, i sistema alternatiu per a GitHub Pages)
+                // Recuperar manualment la còpia de seguretat
+                const recuperarBackup = () => {
+                    const backup = localStorage.getItem('musics_data_backup');
+                    if (backup) {
+                        members.value = JSON.parse(backup);
+                        actualitzarDades();
+                        alert("S'ha recuperat la teva darrera llista desada en aquest navegador de manera satisfactòria.");
+                    } else {
+                        alert("No s'ha trobat cap còpia de seguretat en aquest ordinador.");
+                    }
+                };
+
+                // CONECTAR AL NÚVOL AMB SEGURETAT I FUSIÓ DE DADES
                 const connectSync = () => {
                     const code = syncCodeInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
                     if (!code) return;
@@ -577,13 +608,22 @@
                     isConnecting.value = true;
 
                     if (firebaseSuportat && db) {
-                        // --- Mode Firebase (Quan estem al Canvas) ---
+                        // --- Mode Firebase (Entorn virtual Canvas) ---
                         if (unsubscribeSync) unsubscribeSync();
                         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'groups', code);
 
                         unsubscribeSync = onSnapshot(docRef, (docSnap) => {
+                            // Bloquejar actualitzacions externes si acabem de fer un canvi nosaltres mateixos (evita bucles)
+                            if (Date.now() - darreraModificacioLocal < 6000) return;
+
                             if (docSnap.exists()) {
-                                members.value = docSnap.data().members || [];
+                                // FUSIÓ: Combinem el local actual amb el del núvol perquè no es perdi res d'entrada
+                                const localMembers = [...members.value];
+                                const cloudMembers = docSnap.data().members || [];
+                                const map = new Map();
+                                localMembers.forEach(m => map.set(m.id, m));
+                                cloudMembers.forEach(m => map.set(m.id, m));
+                                members.value = Array.from(map.values());
                             } else {
                                 setDoc(docRef, { members: members.value });
                             }
@@ -596,7 +636,7 @@
                             disconnectSync();
                         });
                     } else {
-                        // --- Mode Sincronització Alternativa Súper Sencera (GitHub Pages) ---
+                        // --- Mode Sincronització Alternativa Súper Sencera (GitHub Pages / Mòbils) ---
                         syncCode.value = code;
                         localStorage.setItem('musics_sync_code', code);
                         
@@ -604,13 +644,22 @@
                         fetch('https://kvdb.io/Nz83yB99asLdKj271sHjKw/' + code)
                             .then(res => {
                                 if (res.ok) return res.json();
-                                // Si no existeix al núvol, hi pugem el que tenim en local actualment
+                                // Si no existeix al núvol, hi pugem immediatament el que tenim en local actualment
                                 actualitzarDades();
                                 return null;
                             })
                             .then(data => {
                                 if (data && data.members) {
-                                    members.value = data.members;
+                                    // FUSIONEM les dues llistes per garantir que no es perdi res del que tenies a la pantalla
+                                    const localMembers = [...members.value];
+                                    const cloudMembers = data.members || [];
+                                    const map = new Map();
+                                    localMembers.forEach(m => map.set(m.id, m));
+                                    cloudMembers.forEach(m => map.set(m.id, m));
+                                    members.value = Array.from(map.values());
+                                    
+                                    // Guardem la fusió enrere a la base de dades
+                                    actualitzarDades();
                                 }
                                 isConnecting.value = false;
                             })
@@ -638,13 +687,16 @@
                 const iniciarPolling = () => {
                     pararPolling();
                     pollingInterval = setInterval(async () => {
+                        // Regla d'or: No sobreescriure si l'usuari acaba de fer clic en desar fa menys de 6 segons
+                        if (Date.now() - darreraModificacioLocal < 6000) return;
+
                         if (syncCode.value && (!firebaseSuportat || !db)) {
                             try {
                                 const res = await fetch('https://kvdb.io/Nz83yB99asLdKj271sHjKw/' + syncCode.value);
                                 if (res.ok) {
                                     const data = await res.json();
                                     if (data && data.members) {
-                                        // Comparem per veure si hi ha canvis reals abans d'actualitzar la pantalla
+                                        // Només actualitzem el panell visual si les dades han canviat de veritat
                                         const localStr = JSON.stringify(members.value);
                                         const remoteStr = JSON.stringify(data.members);
                                         if (localStr !== remoteStr) {
@@ -653,10 +705,10 @@
                                     }
                                 }
                             } catch (e) {
-                                console.warn("Sondeig temporal fallit.");
+                                console.warn("Sondeig temporal sense connexió.");
                             }
                         }
-                    }, 4000); // Es comprova cada 4 segons
+                    }, 4000); // Comprovació cada 4 segons
                 };
 
                 const pararPolling = () => {
@@ -668,6 +720,10 @@
 
                 // Puja canvis al núvol o a LocalStorage
                 const actualitzarDades = async () => {
+                    // Marquem de seguida el temps local de la modificació per segellar la condició de carrera
+                    darreraModificacioLocal = Date.now();
+                    guardarDadesLocals();
+
                     if (syncCode.value) {
                         if (firebaseSuportat && db) {
                             // Firebase (Canvas)
@@ -682,14 +738,13 @@
                             try {
                                 await fetch('https://kvdb.io/Nz83yB99asLdKj271sHjKw/' + syncCode.value, {
                                     method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ members: members.value })
                                 });
                             } catch (err) {
                                 console.error("Error al desar a la xarxa alternativa:", err);
                             }
                         }
-                    } else {
-                        guardarDadesLocals();
                     }
                 };
 
@@ -820,7 +875,7 @@
                     isConnecting,
                     connectSync,
                     disconnectSync,
-                    firebaseSuportat
+                    recuperarBackup
                 };
             }
         }).mount('#app');
