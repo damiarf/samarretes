@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Músics i Samarretes</title>
+    <!-- Tailwind CSS per al disseny modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js per fer el programa interactiu de forma directa -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800 font-sans">
+
+    <div id="app" v-cloak>
+        
+        <!-- PANTALLA D'INICI DE SESSIÓ -->
+        <div v-if="!isAuthenticated" class="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-12">
+            <div class="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
+                <div class="text-center">
+                    <div class="mx-auto bg-indigo-100 text-indigo-700 p-4 rounded-full w-20 h-20 flex items-center justify-center shadow-inner">
+                        <svg class="h-10 w-10 text-indigo-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                    <h2 class="mt-6 text-3xl font-extrabold text-slate-900 tracking-tight">Accés Protegit</h2>
+                    <p class="mt-2 text-sm text-slate-500">
+                        Introdueix la clau d'accés per gestionar els músics.
+                    </p>
+                </div>
+                
+                <form class="mt-8 space-y-6" @submit.prevent="handleLogin">
+                    <div>
+                        <label for="password" class="sr-only">Clau d'accés</label>
+                        <input
+                            id="password"
+                            type="password"
+                            required
+                            v-model="passwordInput"
+                            class="appearance-none rounded-xl relative block w-full px-4 py-3 border border-slate-300 placeholder-slate-400 text-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition duration-150"
+                            placeholder="Clau d'accés (Defecte: 1234)"
+                        />
+                    </div>
+
+                    <div v-if="loginError" class="bg-red-50 text-red-700 p-3.5 rounded-xl flex items-start gap-2.5 text-sm border border-red-100 animate-shake">
+                        <svg class="h-5 w-5 shrink-0 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
+                        </svg>
+                        <span>{{ loginError }}</span>
+                    </div>
+
+                    <div>
+                        <button
+                            type="submit"
+                            class="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 shadow-lg"
+                        >
+                            Entrar al Gestor
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- APLICACIÓ PRINCIPAL -->
+        <div v-else>
+            <!-- Capçalera -->
+            <header class="bg-indigo-700 text-white shadow-md">
+                <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex items-center gap-4 text-left">
+                        <div class="bg-white text-indigo-700 p-2 rounded-xl shadow shrink-0">
+                            <svg class="h-8 w-8 text-indigo-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20.38 3.46 16 1.7a2 2 0 0 0-2 0l-4 1.76-4-1.76a2 2 0 0 0-2 0L.38 3.46A2 2 0 0 0 0 5.24V14a2 2 0 0 0 2 2h3v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5h3a2 2 0 0 0 2-2V5.24a2 2 0 0 0-.38-1.78Z"/>
+                                <path d="M10 2c0 1.1.9 2 2 2s2-.9 2-2"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold tracking-tight">Músics i polos</h1>
+                            <p class="text-indigo-200 text-sm">Organització del llistat d'instruments i comandes de polos</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                        <!-- Botó exportar -->
+                        <button
+                            @click="exportToCSV"
+                            class="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl transition duration-150 text-sm shadow-md"
+                        >
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+                            </svg>
+                            Exportar a Full (.CSV)
+                        </button>
+
+                        <!-- Botó Sortir -->
+                        <button
+                            @click="handleLogout"
+                            class="inline-flex items-center justify-center gap-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold py-2.5 px-4 rounded-xl transition duration-150 text-sm"
+                        >
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
+                            </svg>
+                            Sortir
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+                
+                <!-- targetes de resum ràpid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    
+                    <!-- Total membres -->
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+                        <div class="bg-indigo-50 text-indigo-600 p-3.5 rounded-xl">
+                            <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-slate-500 font-medium uppercase tracking-wider">Total de Persones</p>
+                            <h3 class="text-3xl font-bold text-slate-950 mt-1">{{ members.length }}</h3>
+                        </div>
+                    </div>
+
+                    <!-- Instruments únics -->
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+                        <div class="bg-amber-50 text-amber-600 p-3.5 rounded-xl">
+                            <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-slate-500 font-medium uppercase tracking-wider">Instruments Actius</p>
+                            <h3 class="text-3xl font-bold text-slate-950 mt-1">{{ instrumentsCount }}</h3>
+                        </div>
+                    </div>
+
+                    <!-- Samarretes demanades -->
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+                        <div class="bg-emerald-50 text-emerald-600 p-3.5 rounded-xl">
+                            <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20.38 3.46 16 1.7a2 2 0 0 0-2 0l-4 1.76-4-1.76a2 2 0 0 0-2 0L.38 3.46A2 2 0 0 0 0 5.24V14a2 2 0 0 0 2 2h3v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5h3a2 2 0 0 0 2-2V5.24a2 2 0 0 0-.38-1.78Z"/>
+                                <path d="M10 2c0 1.1.9 2 2 2s2-.9 2-2"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-slate-500 font-medium uppercase tracking-wider">Talles Triades</p>
+                            <h3 class="text-3xl font-bold text-slate-950 mt-1">
+                                {{ members.filter(m => m.tshirtSize).length }}
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓ CENTRAL DE TREBALL -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    
+                    <!-- Formulari de dades i Sincronització (Esquerra) -->
+                    <div class="lg:col-span-4 flex flex-col gap-6">
+                        
+                        <!-- Bloc de Sincronització Compartida -->
+                        <div class="bg-indigo-50 border border-indigo-150 rounded-2xl p-5 shadow-sm">
+                            <h3 class="font-bold text-indigo-900 text-sm flex items-center gap-2 uppercase tracking-wider">
+                                <svg class="h-5 w-5 text-indigo-600 animate-pulse" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                                </svg>
+                                Sincronització Online
+                            </h3>
+                            <p class="text-xs text-indigo-700 mt-1 mb-4 leading-relaxed">
+                                Escriu un codi qualsevol (ex: <code class="bg-indigo-100 px-1 py-0.5 rounded font-bold">bandasoller</code>). Fes servir el mateix codi en altres dispositius per compartir la mateixa llista!
+                            </p>
+                            
+                            <div class="flex gap-2">
+                                <input
+                                    type="text"
+                                    v-model="syncKey"
+                                    placeholder="Nom de la teva banda..."
+                                    class="flex-1 px-3 py-2 border border-indigo-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    :disabled="isSyncing"
+                                />
+                                <button
+                                    @click="conectarSincronitzacio"
+                                    :disabled="isSyncing || !syncKey.trim()"
+                                    class="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold px-4 py-2 rounded-xl text-xs transition duration-150 shadow-md"
+                                >
+                                    {{ isSyncing ? 'Connectant...' : 'Sincronitzar' }}
+                                </button>
+                            </div>
+                            
+                            <!-- Estat de la connexió -->
+                            <div class="mt-3 text-xs flex items-center justify-between">
+                                <span class="text-slate-500">Estat actual:</span>
+                                <span v-if="connectionMode === 'cloud'" class="text-emerald-700 font-bold flex items-center gap-1">
+                                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Online (Sincronitzat)
+                                </span>
+                                <span v-else class="text-indigo-700 font-bold flex items-center gap-1">
+                                    <span class="h-2 w-2 rounded-full bg-indigo-500"></span> Local (Desat en aquest PC)
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Formulari central adaptat per a modificacions clares -->
+                        <div 
+                            id="formulari-alta"
+                            :class="isEditing ? 'border-2 border-indigo-500 bg-indigo-50/20' : 'border border-slate-100 bg-white'"
+                            class="rounded-2xl p-6 shadow-sm transition-all duration-300"
+                        >
+                            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <span v-if="isEditing" class="text-indigo-600 flex items-center gap-1.5">
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                                    </svg>
+                                    Modificar Persona
+                                </span>
+                                <span v-else class="text-indigo-600 flex items-center gap-1.5">
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M5 12h14"/><path d="M12 5v14"/>
+                                    </svg>
+                                    Afegir Nova Persona
+                                </span>
+                            </h2>
+
+                            <!-- Informació del músic en edició -->
+                            <div v-if="isEditing" class="mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs px-3.5 py-2 rounded-xl flex items-center justify-between">
+                                <span>Modificant el músic: <strong>{{ formData.name }} {{ formData.lastName }}</strong></span>
+                                <button type="button" @click="handleCancelEdit" class="text-indigo-600 hover:text-indigo-900 font-bold">✕</button>
+                            </div>
+
+                            <form @submit.prevent="handleSubmit" class="space-y-4">
+                                <div v-if="error" class="bg-red-50 text-red-700 p-3.5 rounded-xl flex items-start gap-2.5 text-xs border border-red-100">
+                                    <svg class="h-5 w-5 shrink-0 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
+                                    </svg>
+                                    <span>{{ error }}</span>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-1">Nom <span class="text-red-500">*</span></label>
+                                    <input
+                                        type="text"
+                                        v-model="formData.name"
+                                        placeholder="Ex: Joan"
+                                        class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-1">Llinatges <span class="text-red-500">*</span></label>
+                                    <input
+                                        type="text"
+                                        v-model="formData.lastName"
+                                        placeholder="Ex: Pons Mas"
+                                        class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-1">Instrument <span class="text-red-500">*</span></label>
+                                    <input
+                                        type="text"
+                                        v-model="formData.instrument"
+                                        placeholder="Ex: Saxòfon, Clarinet..."
+                                        class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-1">Talla de samarreta</label>
+                                    <div class="grid grid-cols-4 gap-2 mt-1">
+                                        <button
+                                            v-for="size in tshirtSizes"
+                                            :key="size"
+                                            type="button"
+                                            @click="formData.tshirtSize = size"
+                                            :class="formData.tshirtSize === size ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+                                            class="py-2 text-center font-bold text-xs rounded-xl border transition-all duration-150"
+                                        >
+                                            {{ size }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="pt-2 flex gap-3">
+                                    <button
+                                        v-if="isEditing"
+                                        type="button"
+                                        @click="handleCancelEdit"
+                                        class="w-1/2 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 px-4 rounded-xl transition duration-150"
+                                    >
+                                        Cancel·lar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        :class="isEditing ? 'w-1/2' : 'w-full'"
+                                        class="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl transition duration-150 shadow-md"
+                                    >
+                                        {{ isEditing ? 'Desar canvis' : 'Afegir a la llista' }}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Resum de les talles totals -->
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                            <h2 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                                Recompte per demanar
+                            </h2>
+                            <div class="space-y-3">
+                                <div v-for="size in tshirtSizes" :key="size" class="flex items-center justify-between gap-4">
+                                    <span class="w-10 font-bold text-slate-700 text-sm">{{ size }}</span>
+                                    <div class="flex-1 bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                        <div 
+                                            class="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                                            :style="{ width: getPercentage(size) + '%' }"
+                                        ></div>
+                                    </div>
+                                    <span :class="sizeStats[size] > 0 ? 'text-slate-900' : 'text-slate-400'" class="w-10 text-right text-sm">
+                                        {{ sizeStats[size] || 0 }} u.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Taula interactiva (Dreta) -->
+                    <div class="lg:col-span-8 flex flex-col gap-6">
+                        
+                        <!-- Barra de cerca ràpida -->
+                        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3">
+                            <div class="relative w-full">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                                    </svg>
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Cerca per nom, llinatges o instrument..."
+                                    v-model="searchQuery"
+                                    class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150 text-sm"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Taula de contingut de dades -->
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                                <h3 class="font-bold text-slate-900 text-lg">Músics Registrats</h3>
+                                <span class="text-xs bg-indigo-100 text-indigo-700 py-0.5 px-2 rounded-full font-semibold">
+                                    {{ filteredMembers.length }} persones
+                                </span>
+                            </div>
+
+                            <div v-if="filteredMembers.length === 0" class="p-12 text-center text-slate-400">
+                                No s'ha trobat cap persona. Comença afegint-ne una al formulari!
+                            </div>
+
+                            <div v-else class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="border-b border-slate-100 bg-slate-50/20 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                            <th class="py-4 px-6">Nom i Llinatges</th>
+                                            <th class="py-4 px-6">Instrument</th>
+                                            <th class="py-4 px-6 text-center">Talla</th>
+                                            <th class="py-4 px-6 text-right">Accions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr v-for="member in filteredMembers" :key="member.id" class="hover:bg-slate-50/40 transition duration-150">
+                                            
+                                            <!-- Informació personal -->
+                                            <td class="py-4 px-6">
+                                                <div class="font-semibold text-slate-900">{{ member.name }}</div>
+                                                <div class="text-slate-500 text-sm">{{ member.lastName }}</div>
+                                            </td>
+
+                                            <!-- Instrument musical -->
+                                            <td class="py-4 px-6">
+                                                <span class="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-100">
+                                                    {{ member.instrument }}
+                                                </span>
+                                            </td>
+
+                                            <!-- Talla triada -->
+                                            <td class="py-4 px-6 text-center">
+                                                <span class="inline-flex justify-center items-center w-8 h-8 rounded-xl font-bold text-sm bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                    {{ member.tshirtSize }}
+                                                </span>
+                                            </td>
+
+                                            <!-- Accions d'Edició i Supressió -->
+                                            <td class="py-4 px-6 text-right">
+                                                <div class="flex justify-end gap-2">
+                                                    <!-- Editar -->
+                                                    <button
+                                                        @click="handleEdit(member)"
+                                                        title="Modificar dades"
+                                                        class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition duration-150"
+                                                    >
+                                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                                                        </svg>
+                                                    </button>
+                                                    <!-- Eliminar -->
+                                                    <button
+                                                        @click="handleDelete(member.id)"
+                                                        title="Eliminar"
+                                                        class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition duration-150"
+                                                    >
+                                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </td>
+
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Codi reactiu i lògica de l'aplicació -->
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                // Estat del llistat
+                const members = ref([]);
+                
+                // Seguretat fixa
+                const isAuthenticated = ref(false);
+                const passwordInput = ref('');
+                const fixedPassword = '1234'; 
+                const loginError = ref('');
+
+                // Sincronització compartida (kvdb.io lliure de registres per a màxima simplicitat)
+                const syncKey = ref('');
+                const connectionMode = ref('local'); // 'local' o 'cloud'
+                const isSyncing = ref(false);
+                const bucketId = 'GscG4L85x6gLcsXvJ4uD5w'; // ID de contenidor segur reservat per a aquesta app
+
+                // Estats del formulari
+                const formData = ref({ id: '', name: '', lastName: '', instrument: '', tshirtSize: 'M' });
+                const isEditing = ref(false);
+                const error = ref('');
+
+                // Estat de cerca
+                const searchQuery = ref('');
+
+                const tshirtSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+
+                // Carrega inicial des del LocalStorage per defecte
+                onMounted(() => {
+                    if (sessionStorage.getItem('is_auth_active') === 'true') {
+                        isAuthenticated.value = true;
+                    }
+                    
+                    // Si ja teníem una clau de sincronització desada, la connectem
+                    const savedSyncKey = localStorage.getItem('gestor_musics_sync_key');
+                    if (savedSyncKey) {
+                        syncKey.value = savedSyncKey;
+                        conectarSincronitzacio();
+                    } else {
+                        carregarDadesLocals();
+                    }
+                });
+
+                // Control d'Inici de Sessió
+                const handleLogin = () => {
+                    if (passwordInput.value === fixedPassword) {
+                        isAuthenticated.value = true;
+                        loginError.value = '';
+                        sessionStorage.setItem('is_auth_active', 'true');
+                    } else {
+                        loginError.value = "La clau és incorrecta. Torna-ho a provar.";
+                        passwordInput.value = '';
+                    }
+                };
+
+                // Tancar la sessió
+                const handleLogout = () => {
+                    isAuthenticated.value = false;
+                    passwordInput.value = '';
+                    sessionStorage.removeItem('is_auth_active');
+                };
+
+                // Carrega local (per si s'usa fora de línia o sense codi de banda)
+                const carregarDadesLocals = () => {
+                    const savedData = localStorage.getItem('gestor_musics_data_simple');
+                    if (savedData) {
+                        try {
+                            members.value = JSON.parse(savedData);
+                        } catch (e) {
+                            members.value = [];
+                        }
+                    } else {
+                        // Exemples inicials
+                        members.value = [
+                            { id: '1', name: 'Joan', lastName: 'Pons Mas', instrument: 'Flauta', tshirtSize: 'M' },
+                            { id: '2', name: 'Maria', lastName: 'Gomez Coll', instrument: 'Clarinet', tshirtSize: 'S' }
+                        ];
+                        guardarLocalment();
+                    }
+                };
+
+                // Desament local
+                const guardarLocalment = () => {
+                    localStorage.setItem('gestor_musics_data_simple', JSON.stringify(members.value));
+                };
+
+                // Sincronitzador al núvol de zero configuració
+                const conectarSincronitzacio = async () => {
+                    if (!syncKey.value.trim()) return;
+                    isSyncing.value = true;
+                    const cleanedKey = syncKey.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+
+                    try {
+                        const response = await fetch(`https://kvdb.io/${bucketId}/${cleanedKey}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            members.value = Array.isArray(data) ? data : [];
+                        } else if (response.status === 404) {
+                            // Si el codi de banda és nou, creem la base de dades buida al núvol
+                            await actualitzarDadesAlNuvol([]);
+                            members.value = [];
+                        }
+                        
+                        connectionMode.value = 'cloud';
+                        localStorage.setItem('gestor_musics_sync_key', cleanedKey);
+                    } catch (e) {
+                        console.error("No s'ha pogut sincronitzar amb el servidor. Mode local actiu.", e);
+                        carregarDadesLocals();
+                    } finally {
+                        isSyncing.value = false;
+                    }
+                };
+
+                const actualitzarDadesAlNuvol = async (llista) => {
+                    if (connectionMode.value !== 'cloud' || !syncKey.value.trim()) return;
+                    const cleanedKey = syncKey.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                    try {
+                        await fetch(`https://kvdb.io/${bucketId}/${cleanedKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(llista)
+                        });
+                    } catch (e) {
+                        console.error("Error en sincronitzar canvis amb el núvol", e);
+                    }
+                };
+
+                // Comptador d'instruments únics
+                const instrumentsCount = computed(() => {
+                    const unique = new Set(members.value.map(m => (m.instrument || '').trim().toLowerCase()).filter(Boolean));
+                    return unique.size;
+                });
+
+                // Gestió del Formulari (Afegir o Modificar)
+                const handleSubmit = async () => {
+                    if (!formData.value.name.trim() || !formData.value.lastName.trim() || !formData.value.instrument.trim()) {
+                        error.value = 'Completa tots els camps marcats amb asterisc (*).';
+                        return;
+                    }
+
+                    if (isEditing.value) {
+                        members.value = members.value.map(m => m.id === formData.value.id ? { ...formData.value } : m);
+                        isEditing.value = false;
+                    } else {
+                        const nouMembre = { 
+                            ...formData.value, 
+                            id: Date.now().toString() 
+                        };
+                        members.value.push(nouMembre);
+                    }
+
+                    if (connectionMode.value === 'cloud') {
+                        await actualitzarDadesAlNuvol(members.value);
+                    } else {
+                        guardarLocalment();
+                    }
+
+                    formData.value = { id: '', name: '', lastName: '', instrument: '', tshirtSize: 'M' };
+                    error.value = '';
+                };
+
+                // Preparar formulari per editar dades i fer scroll cap a dalt de tot
+                const handleEdit = (member) => {
+                    formData.value = { ...member };
+                    isEditing.value = true;
+                    error.value = '';
+                    
+                    window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                };
+
+                // Cancel·lar l'edició
+                const handleCancelEdit = () => {
+                    formData.value = { id: '', name: '', lastName: '', instrument: '', tshirtSize: 'M' };
+                    isEditing.value = false;
+                    error.value = '';
+                };
+
+                // Eliminar un registre de la llista
+                const handleDelete = async (id) => {
+                    members.value = members.value.filter(m => m.id !== id);
+                    
+                    if (connectionMode.value === 'cloud') {
+                        await actualitzarDadesAlNuvol(members.value);
+                    } else {
+                        guardarLocalment();
+                    }
+
+                    if (isEditing.value && formData.value.id === id) {
+                        handleCancelEdit();
+                    }
+                };
+
+                // Filtrar i cercar membres en temps real
+                const filteredMembers = computed(() => {
+                    return members.value.filter(member => {
+                        const query = searchQuery.value.toLowerCase();
+                        const fullName = `${member.name} ${member.lastName}`.toLowerCase();
+                        const instrument = (member.instrument || '').toLowerCase();
+                        return fullName.includes(query) || instrument.includes(query);
+                    });
+                });
+
+                // Recompte de talles
+                const sizeStats = computed(() => {
+                    const stats = {};
+                    tshirtSizes.forEach(s => stats[s] = 0);
+                    members.value.forEach(m => {
+                        if (stats[m.tshirtSize] !== undefined) {
+                            stats[m.tshirtSize]++;
+                        }
+                    });
+                    return stats;
+                });
+
+                const getPercentage = (size) => {
+                    if (members.value.length === 0) return 0;
+                    return ((sizeStats.value[size] || 0) / members.value.length) * 100;
+                };
+
+                // Exportació de dades a format CSV
+                const exportToCSV = () => {
+                    if (members.value.length === 0) return;
+
+                    const headers = ['Nom', 'Llinatges', 'Instrument', 'Talla Samarreta'];
+                    const rows = members.value.map(m => [
+                        (m.name || '').replace(/"/g, '""'), 
+                        (m.lastName || '').replace(/"/g, '""'), 
+                        (m.instrument || '').replace(/"/g, '""'), 
+                        m.tshirtSize
+                    ]);
+
+                    const csvContent = [
+                        headers.join(';'),
+                        ...rows.map(e => e.map(val => `"${val}"`).join(';'))
+                    ].join('\n');
+
+                    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'llistat_musics_samarretes.csv');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+
+                return {
+                    members,
+                    isAuthenticated,
+                    passwordInput,
+                    loginError,
+                    handleLogin,
+                    handleLogout,
+                    syncKey,
+                    connectionMode,
+                    isSyncing,
+                    conectarSincronitzacio,
+                    formData,
+                    isEditing,
+                    error,
+                    searchQuery,
+                    tshirtSizes,
+                    instrumentsCount,
+                    handleSubmit,
+                    handleEdit,
+                    handleCancelEdit,
+                    handleDelete,
+                    filteredMembers,
+                    sizeStats,
+                    getPercentage,
+                    exportToCSV
+                };
+            }
+        }).mount('#app');
+    </script>
+
+    <style>
+        [v-cloak] {
+            display: none !important;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+            20%, 40%, 60%, 80% { transform: translateX(4px); }
+        }
+        .animate-shake {
+            animation: shake 0.35s ease-in-out;
+        }
+    </style>
+</body>
+</html>
